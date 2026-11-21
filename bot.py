@@ -1,19 +1,29 @@
 """Bot Telegram: notizie estere di calciomercato sulla AS Roma.
-Usa solo la libreria standard di Python. Pensato per GitHub Actions."""
+Pensato per GitHub Actions."""
 import html
 import json
 import os
+import re
 import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
-import re
+
 from googlenewsdecoder import gnewsdecoder
 
 TOKEN = os.environ["TELEGRAM_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 SEEN_FILE = "seen.json"
 MAX_MESSAGES_PER_RUN = 10
+
+# Se una di queste parole compare nel titolo, nell'anteprima o nel testo
+# dell'articolo, la notizia viene scartata (scrivi tutto in minuscolo)
+ITALIAN_MENTIONS = [
+    "gazzetta", "corriere dello sport", "corriere della sera",
+    "repubblica", "il tempo", "tuttosport", "il messaggero", "la stampa",
+    "romatoday", "tuttomercatoweb", "tmw", "calciomercato.com",
+    "sky sport italia", "sportmediaset", "la roma 24", "forzaroma",
+]
 
 # (lingua, paese, edizione, query di ricerca)
 EDITIONS = [
@@ -69,6 +79,11 @@ def get_articles():
             host = urllib.parse.urlparse(src_url).hostname or ""
             if host.endswith(".it"):
                 continue  # salta siti italiani
+            # scarta se titolo o anteprima nominano testate italiane
+            testo = (title + " " + (item.findtext("description") or "")).lower()
+            if any(k in testo for k in ITALIAN_MENTIONS):
+                print("Scartato (titolo/anteprima):", title)
+                continue
             articles[guid] = {"title": title, "link": link, "source": src_name, "lang": hl}
     return articles
 
@@ -82,15 +97,23 @@ def send(text):
         f"https://api.telegram.org/bot{TOKEN}/sendMessage", data=data, timeout=30
     )
 
+
 def cita_testate_italiane(link):
+    """True se il testo dell'articolo cita una testata italiana."""
     try:
         res = gnewsdecoder(link, interval=1)
         if not res.get("status"):
+            print("Link non decodificabile, lascio passare:", link[:70])
             return False
         page = fetch(res["decoded_url"]).decode("utf-8", errors="ignore").lower()
         page = re.sub(r"<script.*?</script>|<style.*?</style>|<[^>]+>", " ", page, flags=re.S)
-        return any(k in page for k in ITALIAN_MENTIONS)
-    except Exception:
+        for k in ITALIAN_MENTIONS:
+            if k in page:
+                print(f"  -> trovata la parola '{k}'")
+                return True
+        return False
+    except Exception as e:
+        print(f"Errore lettura articolo ({e}), lascio passare")
         return False  # se non riesco a leggere, lascio passare
 
 
@@ -105,7 +128,13 @@ def main():
         # al primo avvio non invio il passato: segno tutto come visto
         send("✅ Bot AS Roma Mercato attivo! Da ora ti avviso sulle nuove notizie estere.")
     else:
-        da_inviare = [(g, a) for g, a in new if not cita_testate_italiane(a["link"])]
+        da_inviare = []
+        for g, a in new:
+            if cita_testate_italiane(a["link"]):
+                print("Scartato (cita testate italiane nel testo):", a["title"])
+            else:
+                da_inviare.append((g, a))
+        print(f"Da inviare: {len(da_inviare)}")
         for g, a in da_inviare[:MAX_MESSAGES_PER_RUN]:
             msg = (
                 f"🐺 <b>{html.escape(a['title'])}</b>\n"
