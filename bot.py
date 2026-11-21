@@ -99,12 +99,17 @@ def send(text):
 
 
 def cita_testate_italiane(link):
-    """True se il testo dell'articolo cita una testata italiana."""
+    """True = cita testate italiane, False = pulito, None = non verificabile."""
     try:
-        res = gnewsdecoder(link, interval=1)
-        if not res.get("status"):
-            print("Link non decodificabile, lascio passare:", link[:70])
-            return False
+        res = None
+        for tentativo in range(2):
+            res = gnewsdecoder(link, interval=3)
+            if res.get("status"):
+                break
+            time.sleep(5)
+        if not res or not res.get("status"):
+            print("Link non decodificabile:", (res or {}).get("message", "nessuna risposta"))
+            return None
         page = fetch(res["decoded_url"]).decode("utf-8", errors="ignore").lower()
         page = re.sub(r"<script.*?</script>|<style.*?</style>|<[^>]+>", " ", page, flags=re.S)
         for k in ITALIAN_MENTIONS:
@@ -113,9 +118,8 @@ def cita_testate_italiane(link):
                 return True
         return False
     except Exception as e:
-        print(f"Errore lettura articolo ({e}), lascio passare")
-        return False  # se non riesco a leggere, lascio passare
-
+        print(f"Errore lettura articolo ({e})")
+        return None
 
 def main():
     seen, first_run = load_seen()
@@ -128,18 +132,21 @@ def main():
         # al primo avvio non invio il passato: segno tutto come visto
         send("✅ Bot AS Roma Mercato attivo! Da ora ti avviso sulle nuove notizie estere.")
     else:
-        da_inviare = []
+                da_inviare = []
         for g, a in new:
-            if cita_testate_italiane(a["link"]):
+            esito = cita_testate_italiane(a["link"])
+            if esito is True:
                 print("Scartato (cita testate italiane nel testo):", a["title"])
             else:
+                a["verificato"] = esito is False
                 da_inviare.append((g, a))
         print(f"Da inviare: {len(da_inviare)}")
         for g, a in da_inviare[:MAX_MESSAGES_PER_RUN]:
-            msg = (
+           msg = (
                 f"🐺 <b>{html.escape(a['title'])}</b>\n"
                 f"🌍 {html.escape(a['source'])} ({a['lang']})\n"
-                f"{a['link']}"
+                + ("" if a["verificato"] else "⚠️ testo non verificato\n")
+                + f"{a['link']}"
             )
             try:
                 send(msg)
