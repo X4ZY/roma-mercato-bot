@@ -8,21 +8,22 @@ on:
 permissions:
   contents: write
 
-  concurrency:
+concurrency:
   group: roma-bot
   cancel-in-progress: false
+
 jobs:
   run-bot:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       - name: Installa dipendenze
-        run: pip install googlenewsdecoder    
+        run: pip install googlenewsdecoder
 
       - name: Esegui il bot
         env:
@@ -36,5 +37,3 @@ jobs:
           git config user.email "roma-bot@users.noreply.github.com"
           git add seen.json
           git diff --cached --quiet || (git commit -m "aggiorna seen.json" && git pull --rebase && git push)
-
-
