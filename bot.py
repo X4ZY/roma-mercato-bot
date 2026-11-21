@@ -7,6 +7,8 @@ import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+import re
+from googlenewsdecoder import gnewsdecoder
 
 TOKEN = os.environ["TELEGRAM_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
@@ -80,6 +82,17 @@ def send(text):
         f"https://api.telegram.org/bot{TOKEN}/sendMessage", data=data, timeout=30
     )
 
+def cita_testate_italiane(link):
+    try:
+        res = gnewsdecoder(link, interval=1)
+        if not res.get("status"):
+            return False
+        page = fetch(res["decoded_url"]).decode("utf-8", errors="ignore").lower()
+        page = re.sub(r"<script.*?</script>|<style.*?</style>|<[^>]+>", " ", page, flags=re.S)
+        return any(k in page for k in ITALIAN_MENTIONS)
+    except Exception:
+        return False  # se non riesco a leggere, lascio passare
+
 
 def main():
     seen, first_run = load_seen()
@@ -92,7 +105,8 @@ def main():
         # al primo avvio non invio il passato: segno tutto come visto
         send("✅ Bot AS Roma Mercato attivo! Da ora ti avviso sulle nuove notizie estere.")
     else:
-        for g, a in new[:MAX_MESSAGES_PER_RUN]:
+        da_inviare = [(g, a) for g, a in new if not cita_testate_italiane(a["link"])]
+        for g, a in da_inviare[:MAX_MESSAGES_PER_RUN]:
             msg = (
                 f"🐺 <b>{html.escape(a['title'])}</b>\n"
                 f"🌍 {html.escape(a['source'])} ({a['lang']})\n"
