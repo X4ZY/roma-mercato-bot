@@ -2,8 +2,8 @@ name: Roma Mercato Bot
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # ogni 30 minuti
-  workflow_dispatch:          # permette l'avvio manuale
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
 
 permissions:
   contents: write
