@@ -121,6 +121,7 @@ def cita_testate_italiane(link):
         print(f"Errore lettura articolo ({e})")
         return None
 
+
 def main():
     seen, first_run = load_seen()
     seen_set = set(seen)
@@ -132,7 +133,7 @@ def main():
         # al primo avvio non invio il passato: segno tutto come visto
         send("✅ Bot AS Roma Mercato attivo! Da ora ti avviso sulle nuove notizie estere.")
     else:
-                da_inviare = []
+        da_inviare = []
         for g, a in new:
             esito = cita_testate_italiane(a["link"])
             if esito is True:
@@ -142,7 +143,7 @@ def main():
                 da_inviare.append((g, a))
         print(f"Da inviare: {len(da_inviare)}")
         for g, a in da_inviare[:MAX_MESSAGES_PER_RUN]:
-           msg = (
+            msg = (
                 f"🐺 <b>{html.escape(a['title'])}</b>\n"
                 f"🌍 {html.escape(a['source'])} ({a['lang']})\n"
                 + ("" if a["verificato"] else "⚠️ testo non verificato\n")
