@@ -8,11 +8,16 @@ import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 
 TOKEN = os.environ["TELEGRAM_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 SEEN_FILE = "seen.json"
 MAX_MESSAGES_PER_RUN = 10
+
+# Scarta gli articoli pubblicati da piu' di questo numero di ore
+MAX_ORE = 12
 
 # True = prova a leggere il testo degli articoli (oggi la decodifica dei link
 # di Google News fallisce da GitHub, quindi e' disattivato)
@@ -86,6 +91,16 @@ def get_articles():
             src_url = src.get("url", "") if src is not None else ""
             if "roma" not in title.lower():
                 continue
+            # scarta le notizie troppo vecchie
+            pub = item.findtext("pubDate")
+            if pub:
+                try:
+                    eta = datetime.now(timezone.utc) - parsedate_to_datetime(pub)
+                    if eta > timedelta(hours=MAX_ORE):
+                        print(f"Scartato (vecchio di {int(eta.total_seconds() // 3600)} ore): {title}")
+                        continue
+                except Exception:
+                    pass  # se la data non e' leggibile, lascio passare
             host = urllib.parse.urlparse(src_url).hostname or ""
             if host.endswith(".it"):
                 continue  # salta siti italiani
